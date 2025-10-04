@@ -4,7 +4,7 @@
 - Bastián De La Fuente
 - Dubalio Pérez
 
-## 1) Funcionamiento de las llamadas al sistema (nivel medio)
+## 1) Funcionamiento de las llamadas al sistema 
 
 - Un programa en modo usuario invoca una función (por ejemplo, getppid).
 - Un “stub” de usuario arma la llamada: coloca el número del syscall en el registro a7, los argumentos en a0..a5 y ejecuta ecall (cambio a modo kernel).
@@ -27,15 +27,32 @@
 **Cómo probar**
 ```sh
 make clean
-make qemu-nox
+make qemu
 $ ppidtest
 ```
 
 **Y esto seberia dar:**
 
-![Salida de ppidtest en xv6](ppidtest.png)
+![Salida](ppidtest.png)
 
-## 2) Cambios realizados para getancestor
+## 3) Cambios realizados para getancestor
+
+- kernel/sysproc.c: se implementó la función del kernel que recorre n veces el enlace parent y retorna el pid encontrado; si n < 0 o no hay tantos ancestros, retorna -1.
+- kernel/syscall.h: se reservó un número nuevo para identificar la syscall getancestor.
+- kernel/syscall.c: se declaró y registró getancestor en la tabla que asocia números de syscall con funciones del kernel.
+- user/user.h: se declaró getancestor para que los programas de usuario puedan llamarla.
+- user/usys.pl: se agregó la entrada para que se genere el puente (stub) de usuario.
+- Makefile y user/yosoytupadre.c: se añadió un programa de prueba que crea la cadena yo → hijo → nieto y valida getancestor(0..3).
+
+**Cómo probar**
+```sh
+make clean
+make qemu
+$ yosoytupadre
+```
+**Y esto seberia dar:**
+
+![Salida](ancestor.png)
 
 ## 4) Dificultades y cómo se resolvieron
 
