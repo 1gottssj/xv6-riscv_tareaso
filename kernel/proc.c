@@ -716,7 +716,10 @@ procdump(void)
       state = states[p->state];
     else
       state = "???";
-    printf("%d %s %s", p->pid, state, p->name);
-    printf("\n");
+    // printf("%d %s %s", p->pid, state, p->name);
+    // printf("\n");
+        printf(" pid %d state %s name %s tickets %d slices %d\n",
+           p->pid, state, p->name, p->tickets, (int)p->run_slices);
+
   }
 }
