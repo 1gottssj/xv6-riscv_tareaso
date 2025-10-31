@@ -26,6 +26,16 @@ extern char trampoline[]; // trampoline.S
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+static unsigned int randseed = 1;
+static inline unsigned int krand(void){
+  randseed = randseed * 1103515245 + 12345;
+  return randseed;
+}
+static inline int rand_range(int lo, int hi){ 
+  unsigned int r = krand();
+  return lo + (r % (hi - lo + 1));
+}
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
@@ -429,39 +439,61 @@ scheduler(void)
 
   c->proc = 0;
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
+    // Evitar deadlock si todos duermen; luego volvemos a desactivar.
     intr_on();
     intr_off();
 
-    int found = 0;
+    // 1) Sumar tickets de todos los RUNNABLE (forzando mínimo 1)
+    int total = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if(p->state == RUNNABLE){
+        if(p->tickets < 1) p->tickets = 1;
+        total += p->tickets;
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+
+    // Si no hay nada runnable, dormir hasta la próxima interrupción
+    if(total == 0){
+      asm volatile("wfi");
+      continue;
+    }
+
+    // 2) Elegir número ganador en [1..total]
+    int r = rand_range(1, total);
+
+    // 3) Recorrer acumulando hasta alcanzar r
+    int acc = 0;
+    int ran = 0;
+
+    for(p = proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        acc += (p->tickets < 1) ? 1 : p->tickets;
+        if(acc >= r){
+          // Ganador: ejecutar este proceso
+          p->run_slices++;          // contabilidad
+          p->state = RUNNING;
+          c->proc = p;
+          swtch(&c->context, &p->context);
+
+          // Proceso vuelve aquí cuando cede CPU
+          c->proc = 0;
+          ran = 1;
+          release(&p->lock);
+          break;
+        }
+      }
+      release(&p->lock);
+    }
+
+    if(!ran){
+      // Si por una carrera no encontramos ganador, intentamos en el siguiente ciclo
       asm volatile("wfi");
     }
   }
 }
-
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
 // intena because intena is a property of this
