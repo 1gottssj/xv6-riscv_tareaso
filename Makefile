@@ -144,6 +144,7 @@ UPROGS=\
 	$U/_dorphan\
 	$U/_ppidtest\
 	$U/_yosoytupadre\
+	$U/_demo
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
