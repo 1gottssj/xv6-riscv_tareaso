@@ -23,3 +23,4 @@
 #define SYS_getppid  22
 #define SYS_getancestor  23  
 #define SYS_settickets   24  
+#define SYS_sleep        25

@@ -1,69 +1,57 @@
-# INFORME — Tarea 1 (xv6-riscv)
-
-### Integrantes:
-- Bastián De La Fuente
+# Informe Tarea 2  Lottery Scheduling
+## Integrantes:
+- Bastian De La Fuente
 - Dubalio Pérez
+## Funcionamiento y lógica de la implementación
+- Se reemplazó el planificador Round Robin de xv6 por un planificador de tipo Lottery Scheduling.  
+- En este esquema, cada proceso tiene una cantidad de tickets que representa su probabilidad de ser elegido para usar la CPU.  
+- En cada iteración del scheduler se suman los tickets de todos los procesos en estado RUNNABLE, se genera un número aleatorio entre 1 y el total, y se recorre la tabla de procesos acumulando tickets hasta encontrar el proceso ganador.  
+- Ese proceso se ejecuta y su contador de ejecuciones (run_slices) se incrementa.  
+- En promedio, los procesos con más tickets reciben más tiempo de CPU, manteniendo una distribución proporcional pero no determinista.
 
-## 1) Funcionamiento de las llamadas al sistema 
+## Modificaciones realizadas
+- **kernel/proc.h**:  
+  Se agregaron dos nuevos campos a la estructura `proc`:  
+  `int tickets` (cantidad de tickets de cada proceso) y `uint64 run_slices` (contador de veces que fue elegido por el scheduler).
 
-- Un programa en modo usuario invoca una función (por ejemplo, getppid).
-- Un “stub” de usuario arma la llamada: coloca el número del syscall en el registro a7, los argumentos en a0..a5 y ejecuta ecall (cambio a modo kernel).
-- El kernel entra por usertrap y llama a syscall.
-- syscall consulta una tabla que mapea número de syscall → función del kernel y despacha a la rutina correspondiente (por ejemplo, sys_getppid).
-- La rutina del kernel hace el trabajo y deja el valor de retorno en a0.
-- Se restaura el contexto y se vuelve a modo usuario; la función en user space recibe el valor de retorno.
+- **kernel/proc.c**:  
+  En la función `allocproc()` se inicializaron los campos `tickets = 100` y `run_slices = 0`.  
+  Se modificó la función `scheduler()` para implementar la lógica de lotería:  
+  - Se calcula el total de tickets de procesos RUNNABLE.  
+  - Si el total es 0, el scheduler continúa el ciclo sin ejecutar nada.  
+  - Se genera un número aleatorio entre 1 y el total.  
+  - Se recorre la lista de procesos acumulando tickets hasta encontrar el ganador.  
+  - Se ejecuta el proceso ganador y se incrementa su campo `run_slices`.  
+  Además, se agregó una pequeña función de generación de números aleatorios (`krand` y `rand_range`) dentro del mismo archivo.  
+  En `procdump()` se modificó el `printf` para mostrar también los campos `tickets` y `run_slices`, permitiendo observar el reparto de CPU.
 
----
+- **kernel/sysproc.c**:  
+  Se creó la syscall `sys_settickets()` para permitir que un proceso cambie su cantidad de tickets.  
+  Si el valor recibido es menor que 1, se asigna automáticamente 1.  
+  El código lee el argumento con `argint(0, &n)` y actualiza `myproc()->tickets`.
 
-## 2) Cambios realizados para getppid
+- **kernel/syscall.h, kernel/syscall.c, user/user.h, user/usys.pl**:  
+  Se registró la nueva syscall `settickets` (número de syscall, prototipo, entrada en la tabla del kernel y stub de usuario).
 
-- kernel/sysproc.c: se implementó la función del kernel que devuelve el pid del proceso padre del actual; si no hay padre, devuelve −1.  
-- kernel/syscall.h: se reservó un número nuevo para identificar la syscall getppid.  
-- kernel/syscall.c: se declaró y registró getppid en la tabla que asocia números de syscall con funciones del kernel.  
-- user/user.h: se declaró getppid para que los programas de usuario puedan llamarla.  
-- user/usys.pl: se agregó la entrada para que se genere el “puente” (stub) de usuario.  
-- Makefile y user/ppidtest.c: se añadió un programa de prueba que imprime su pid y el de su padre, y luego hace un fork para comprobar que el hijo hereda como padre al proceso que lo creó.
+- **user/demo.c**:  
+  Programa de prueba que crea 10 procesos con distintos valores de tickets (`50, 100, 150, ... 500`).  
+  Cada proceso imprime su PID y tickets asignados, y luego entra en un bucle infinito para consumir CPU.  
+  El padre muestra un mensaje final para indicar que la demo está corriendo y que se puede usar `Ctrl+A, P` (en QEMU) para ver los tickets y slices en `procdump`.
 
-**Cómo probar**
-```sh
-make clean
-make qemu
-$ ppidtest
-```
+## Dificultades encontradas y soluciones implementadas
+- **Problemas con `sleep()` y funciones de usuario**:  
+  Al intentar usar `sleep()` o `yield()` en el programa `demo.c`, aparecían errores de compilación y linker porque esas funciones no estaban declaradas o mapeadas como syscalls en esta versión del xv6.  
+  La solución fue eliminar las llamadas a `sleep()` y dejar un bucle infinito para mantener los procesos activos, permitiendo al scheduler repartir la CPU de forma natural.  
 
-**Y esto seberia dar:**
+- **Impresión desordenada en consola**:  
+  Los procesos hijos imprimen al mismo tiempo, lo que provoca texto intercalado.  
+  Se comprobó que esto es normal debido a la concurrencia y no afecta el funcionamiento del scheduler.
 
-![Salida](ppidtest.png)
-
-## 3) Cambios realizados para getancestor
-
-- kernel/sysproc.c: se implementó la función del kernel que recorre n veces el enlace parent y retorna el pid encontrado; si n < 0 o no hay tantos ancestros, retorna -1.
-- kernel/syscall.h: se reservó un número nuevo para identificar la syscall getancestor.
-- kernel/syscall.c: se declaró y registró getancestor en la tabla que asocia números de syscall con funciones del kernel.
-- user/user.h: se declaró getancestor para que los programas de usuario puedan llamarla.
-- user/usys.pl: se agregó la entrada para que se genere el puente (stub) de usuario.
-- Makefile y user/yosoytupadre.c: se añadió un programa de prueba que crea la cadena yo → hijo → nieto y valida getancestor(0..3).
-
-**Cómo probar**
-```sh
-make clean
-make qemu
-$ yosoytupadre
-```
-**Y esto seberia dar:**
-
-![Salida](ancestor.png)
-
-## 4) Dificultades y cómo se resolvieron
-
-- Ejecutar make dentro de xv6 (shell del SO) provoca “exec make failed”.  
-  Solución: salir de QEMU y correr make en la terminal del host (WSL/Ubuntu en VSCode).
-
-- El ejecutable de prueba no aparece en el shell.  
-  Solución: agregar el programa a UPROGS en el Makefile y recompilar.
-
-
-
-
-
+## Posibles problemas de este tipo de scheduler
+El Lottery Scheduling introduce aleatoriedad, por lo que no garantiza un reparto exacto del tiempo de CPU en el corto plazo.  
+Un proceso con menos tickets puede tener más suerte y ser elegido varias veces seguidas.  
+Esto genera falta de determinismo y posibles variaciones temporales en el rendimiento.  
+También puede presentar ineficiencia si hay muy pocos procesos o si los tickets no se ajustan correctamente.  
+En entornos con requerimientos de tiempo real, no es apropiado, ya que no asegura tiempos de respuesta predecibles.  
+Sin embargo, su ventaja principal es la simplicidad y la proporcionalidad probabilística en la asignación de CPU, que se cumple en promedio.
 

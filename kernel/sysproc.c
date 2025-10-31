@@ -133,14 +133,40 @@ sys_uptime(void)
   return xticks;
 }
 
+
 uint64
 sys_settickets(void)
 {
   int n;
-  if (argint(0, &n) < 0)
-    return -1;
+  argint(0, &n);            
+
   if (n < 1)
     n = 1;
-  myproc()->tickets = n;
+
+  struct proc *p = myproc();
+  if (p == 0)
+    return -1;
+
+  acquire(&p->lock);
+  p->tickets = n;
+  release(&p->lock);
+
+  return 0;
+}
+
+uint64
+sys_sleep(void)
+{
+  int n;
+  argint(0, &n);  
+  if (n < 0)
+    n = 0;
+  uint ticks0 = ticks;
+  acquire(&tickslock);
+  while (ticks - ticks0 < n) {
+    if (killed(myproc())) { release(&tickslock); return -1; }
+    sleep(&ticks, &tickslock);
+  }
+  release(&tickslock);
   return 0;
 }
