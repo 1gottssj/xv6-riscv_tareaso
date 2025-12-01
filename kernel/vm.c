@@ -484,12 +484,53 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
 // Protección de lectura - Tarea 3
 int mrdprotect(void *addr, int len) {
-    // Tu implementación aquí según el PDF
+    struct proc *p = myproc();
+    uint64 va = (uint64)addr;
+    uint64 end = va + len * PGSIZE;
+    pte_t *pte;
+    
+    // Validaciones
+    if(va % PGSIZE != 0 || len <= 0)
+        return -1;
+    
+    for(; va < end; va += PGSIZE) {
+        if(va >= MAXVA) return -1;
+        
+        pte = walk(p->pagetable, va, 0);
+        if(pte == 0) return -1;
+        if((*pte & PTE_V) == 0) return -1;
+        if((*pte & PTE_U) == 0) return -1;
+        
+        // Limpiar bit de lectura
+        *pte &= ~PTE_R;
+    }
+    return 0;
 }
 
 int munrdprotect(void *addr, int len) {
-    // Tu implementación aquí según el PDF
+    struct proc *p = myproc();
+    uint64 va = (uint64)addr;
+    uint64 end = va + len * PGSIZE;
+    pte_t *pte;
+    
+    // Validaciones
+    if(va % PGSIZE != 0 || len <= 0)
+        return -1;
+    
+    for(; va < end; va += PGSIZE) {
+        if(va >= MAXVA) return -1;
+        
+        pte = walk(p->pagetable, va, 0);
+        if(pte == 0) return -1;
+        if((*pte & PTE_V) == 0) return -1;
+        if((*pte & PTE_U) == 0) return -1;
+        
+        // Restaurar bit de lectura
+        *pte |= PTE_R;
+    }
+    sfence_vma();
+    return 0;
 }
-
