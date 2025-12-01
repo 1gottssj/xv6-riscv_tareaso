@@ -46,7 +46,7 @@
   Al modificar los bits de las PTEs, era crucial no afectar otros flags como PTE_W, PTE_X, o PTE_U.
   La solución fue usar operaciones de bits precisas: `*pte &= ~PTE_R` para desactivar y `*pte |= PTE_R` para activar.
   
-- **Problemas con sincronización github
+- **Problemas con sincronización github**
 
 - **Validación de parámetros**:
   Se implementaron verificaciones exhaustivas para direcciones no alineadas, longitudes inválidas, 
