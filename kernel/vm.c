@@ -484,3 +484,12 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+// Protección de lectura - Tarea 3
+int mrdprotect(void *addr, int len) {
+    // Tu implementación aquí según el PDF
+}
+
+int munrdprotect(void *addr, int len) {
+    // Tu implementación aquí según el PDF
+}
+
