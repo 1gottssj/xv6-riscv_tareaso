@@ -55,3 +55,4 @@ También puede presentar ineficiencia si hay muy pocos procesos o si los tickets
 En entornos con requerimientos de tiempo real, no es apropiado, ya que no asegura tiempos de respuesta predecibles.  
 Sin embargo, su ventaja principal es la simplicidad y la proporcionalidad probabilística en la asignación de CPU, que se cumple en promedio.
 
+ 
